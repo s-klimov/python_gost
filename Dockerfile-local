@@ -1,0 +1,52 @@
+# Версия Docker образа Python.
+ARG PYTHON=komtek/python:3.7.10-openssl-gost
+# Ссылка на клиент БД Oracle.
+ARG INSTANTCLIENT_URL=https://download.oracle.com/otn_software/linux/instantclient/191000/instantclient-basic-linux.x64-19.10.0.0.0dbru.zip
+# Имя папки для клиента БД Oracle.
+ARG INSTANTCLIENT_DIR=instantclient_19_10
+# Загружаем образ, в котором будем собирать необходимое нам окружение.
+FROM $PYTHON AS build-image
+# Еще раз переопределяем локально аргументы после оператора FROM.
+ARG INSTANTCLIENT_URL
+ARG INSTANTCLIENT_DIR
+# Определяем необходимые переменные окружения,
+# python пакеты будем ставить в папку /app/.local с использованием флага --user
+ENV PYTHONUSERBASE="/app/.local" \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
+# Устанавливаем необходимые библиотеки для сборки python пакетов и поддержки клиента БД Oracle.
+RUN apt-get update && \
+    apt-get install --yes --no-install-recommends python3-dev libpq-dev libaio1 unzip curl gcc && \
+    rm -rf /var/lib/apt/lists/*
+# Устанавливаем временную рабочую директорию.
+WORKDIR /tmp
+# Копируем из папки instantclient архив с клиентом БД Oracle, если он там есть.
+# В некоторых случаях нет возможности установить клиент БД Oracle из интернета (медленная скорость и т.д.),
+# поэтому есть возможность заранее скачать необходимые зависимости.
+#COPY instantclient/ ./
+# Устанавливаем Oracle Instant Client из архива, если он есть, иначе скачиваем его по ссылке.
+RUN [ ! -f "${INSTANTCLIENT_URL##*/}" ] && curl -LSs $INSTANTCLIENT_URL -o "${INSTANTCLIENT_URL##*/}" || : && \
+    mkdir -p $PYTHONUSERBASE && \
+    unzip -q "${INSTANTCLIENT_URL##*/}" -d $PYTHONUSERBASE && \
+    find /usr/lib -name "libaio.so.*" -exec mv -t /app/.local/$INSTANTCLIENT_DIR {} +
+# Копируем файл зависимостей проекта и python пакеты из папки dist, если они есть.
+COPY conf/requirements.txt . ./
+# Устанавливаем python пакеты из папки disk, или скачиваем и устанавливаем их.
+RUN pip install --user --no-warn-script-location -r requirements.txt --no-index --find-links=. && : || \
+    pip install --user --no-warn-script-location -r requirements.txt --no-cache-dir
+# Копируем исходные коды сервиса.
+COPY . /app/
+# Загружаем образ, в котором будем собирать наш сервис.
+FROM $PYTHON
+# Копируем наш сервис с собранным окружением из старого образа в новый.
+COPY --from=build-image /app /app
+# Еще раз переопределяем локально аргументы после оператора FROM.
+ARG INSTANTCLIENT_DIR
+# Определяем необходимые переменные окружения.
+ENV PATH="/app/.local/bin:$PATH" \
+    PYTHONUSERBASE="/app/.local" \
+    LD_LIBRARY_PATH="/app/.local/$INSTANTCLIENT_DIR:$LD_LIBRARY_PATH" \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
+# Устанавливаем рабочую директорию.
+WORKDIR /app
