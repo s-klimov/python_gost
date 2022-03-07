@@ -1,0 +1,53 @@
+version: '3.7'
+
+services:
+
+  python_gost:
+    container_name: python_gost
+    build:
+      dockerfile: Dockerfile-local
+      context: .
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgres://$POSTGRES_USER:$POSTGRES_PASSWORD@localhost:5432/$POSTGRES_DB
+      - REDIS_URL=redis://localhost:6379/0
+    restart: always
+    networks:
+      - komtek_net
+    volumes:
+      - .:/usr/src/app/
+    depends_on:
+      - db
+      - redis_db
+
+  db:
+    container_name: postgres
+    image: postgres:13
+    environment:
+      POSTGRES_USER: $POSTGRES_USER
+      POSTGRES_PASSWORD: $POSTGRES_PASSWORD
+      POSTGRES_DB: $POSTGRES_DB
+    restart: always
+    networks:
+      - komtek_net
+    ports:
+      - $POSTGRES_PORT:5432
+    volumes:
+      - komtek-data-python-gost:/var/lib/postgresql/data
+
+  redis_db:
+    image: redis:alpine
+    volumes:
+      - redis_data:/data
+    networks:
+      - komtek_net
+
+volumes:
+  komtek-data-python-gost:
+  redis_data:
+
+networks:
+  komtek_net:
+    name: komtek_net
+    driver: bridge
