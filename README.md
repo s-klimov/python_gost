@@ -15,6 +15,3 @@ docker-compose build
 ```
 2. Выбрать в PyCharm Pro интерпретатор docker-compose, имя контейнера - имя основного приложения
 3. Ответить на вопрос брандмаура Windows
-
-## Прочие материалы
-[Установка redis на Windows](https://skillbox.ru/media/base/kak_ustanovit_redis_v_os_windows_bez_ispolzovaniya_docker/)
